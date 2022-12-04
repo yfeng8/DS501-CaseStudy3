@@ -1,0 +1,108 @@
+---
+title: "case_study3"
+author: "Yuan Feng"
+date: "2022-11-30"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(stringr)
+library(caret)
+library(mice)
+library(tree)
+library(randomForest)
+```
+
+
+```{r}
+train <- read.table(file="train.csv", na.strings=c("", "NA"), sep=",", header = TRUE)
+```
+
+
+```{r}
+train <- separate(train, Cabin, c('deck','num','side'))
+
+#Convert datatype of numeric or categorical data respectively 
+train$num <- as.numeric(train$num)
+train <- as.data.frame(unclass(train), stringsAsFactors = TRUE)
+
+#Recode the categorical data 
+train <- train %>% 
+    mutate(CryoSleep = factor(case_when(CryoSleep == 'False' ~ 0, CryoSleep == 'True' ~ 1)),
+           Transported = factor(case_when(Transported == 'False' ~ 0,Transported == 'True' ~ 1)),
+           VIP = factor(case_when(VIP == 'False' ~ 0, VIP == 'True' ~ 1)))%>%
+#Ignore the meaningless data
+  select(-c(PassengerId,Name))%>%
+#Use multivariates imputation by chained equations to impute data
+  mice(method = "rf")%>%
+  complete()
+
+#Check the number of missing value after imputation 
+colSums(is.na(train))
+
+#Take a look of the data structure
+str(train)
+
+data_split <- initial_split(train,prop = 0.8)
+training_data <- training(data_split)
+testing_data <- testing(data_split)
+```
+
+```{r}
+# Parepare a csv data file for app use.
+write.csv(train, file = "Spaceship.csv")
+```
+
+
+
+# Modeling
+```{r}
+ctrlspecs <- trainControl(method="cv", 
+                          number=10, 
+                          savePredictions="all",
+                          classProbs=FALSE)
+
+# Set random seed for subsequent random selection and assignment operations
+set.seed(1997)
+
+# # Specify logistic regression model to be estimated using training data
+# # and k-fold cross-validation process
+# model1 <- train(Transported ~ HomePlanet+CryoSleep+deck+num+side+Destination+Age+RoomService+FoodCourt +ShoppingMall+Spa+VRDeck, data=training_data, 
+#                 method="glm", 
+#                 family="binomial", 
+#                 trControl=ctrlspecs)
+# 
+# predictions <- predict(model1, newdata=testing_data)
+# 
+# # Create confusion matrix to assess model fit/performance on test data
+# caret::confusionMatrix(data=predictions, testing_data$Transported)
+# 
+# saveRDS(predictions, "LogisticRegression.RDS")
+```
+
+```{r}
+model2<- train(Transported~HomePlanet+CryoSleep+deck+num+side+Destination+Age+RoomService+FoodCourt +ShoppingMall+Spa+VRDeck, 
+                      data=training_data, 
+                      method='rf', 
+                      metric='Accuracy', 
+                      trControl=ctrlspecs)
+predictions_2 <- stats::predict(model2, newdata=testing_data)
+
+# Create confusion matrix to assess model fit/performance on test data
+caret::confusionMatrix(data=predictions_2, testing_data$Transported)
+
+
+saveRDS(model2, "RandomForest.RDS")
+
+model2$finalModel
+test_accuracy <- mean(predictions_2 == testing_data$Transported)*100
+test_accuracy
+```
+
+```{r}
+# summary(model1)
+# lm(Transported~HomePlanet+CryoSleep+deck+num+side+Destination+Age+RoomService+FoodCourt +ShoppingMall+Spa+VRDeck)
+```
