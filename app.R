@@ -226,3 +226,6 @@ server <- shinyServer(function(input, output) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+
+#Check in code into GitHub
+shiny::runGitHub('DS501-CaseStudy3',"yfeng8", ref = "main")
